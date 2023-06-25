@@ -17,8 +17,7 @@ import java.util.HashMap;
 import java.util.List;
 import java.util.Map;
 
-import static bearmaps.proj2d.utils.Constants.SEMANTIC_STREET_GRAPH;
-import static bearmaps.proj2d.utils.Constants.ROUTE_LIST;
+import static bearmaps.proj2d.utils.Constants.*;
 
 /**
  * Handles requests from the web browser for map images. These images
@@ -84,12 +83,67 @@ public class RasterAPIHandler extends APIRouteHandler<Map<String, Double>, Map<S
      */
     @Override
     public Map<String, Object> processRequest(Map<String, Double> requestParams, Response response) {
-        //System.out.println("yo, wanna know the parameters given by the web browser? They are:");
-        //System.out.println(requestParams);
+        double requestLonDPP = Math.abs(requestParams.get("lrlon") - requestParams.get("ullon")) / requestParams.get("w");
+        int depth = getRequestedDepth(requestLonDPP);
+        double rasterLonDistancePerTile = Math.abs(ROOT_LRLON - ROOT_ULLON) / Math.pow(2, depth);
+        double rasterLatDistancePerTile = Math.abs(ROOT_LRLAT - ROOT_ULLAT) / Math.pow(2, depth);
+
+        double requestULLon = Math.min(ROOT_LRLON, Math.max(ROOT_ULLON, requestParams.get("ullon")));
+        double requestULLat = Math.max(ROOT_LRLAT, Math.min(ROOT_ULLAT, requestParams.get("ullat")));
+
+        double requestLRLon = Math.min(ROOT_LRLON, Math.max(ROOT_ULLON, requestParams.get("lrlon")));
+        double requestLRLat = Math.max(ROOT_LRLAT, Math.min(ROOT_ULLAT, requestParams.get("lrlat")));
+
+        int x0 = (int) Math.floor((requestULLon - ROOT_ULLON) / rasterLonDistancePerTile);
+        int x1 = (int) Math.floor((requestLRLon - ROOT_ULLON) / rasterLonDistancePerTile);
+        int y0 = (int) Math.floor((ROOT_ULLAT - requestULLat) / rasterLatDistancePerTile);
+        int y1 = (int) Math.floor((ROOT_ULLAT - requestLRLat) / rasterLatDistancePerTile);
+
+        double rasterULLon = x0 * rasterLonDistancePerTile + ROOT_ULLON;
+        double rasterLRLon = (x1 + 1) * rasterLonDistancePerTile + ROOT_ULLON;
+        double rasterULLat = ROOT_ULLAT - y0 * rasterLatDistancePerTile;
+        double rasterLRLat = ROOT_ULLAT - (y1 + 1) * rasterLatDistancePerTile;
+
         Map<String, Object> results = new HashMap<>();
-        System.out.println("Since you haven't implemented RasterAPIHandler.processRequest, nothing is displayed in "
-                + "your browser.");
+
+        if (x1 - x0 < 0 || y1 - y0 < 0) {
+            results.put("render_grid", null);
+            results.put("raster_ul_lon", 0.);
+            results.put("raster_ul_lat", 0.);
+            results.put("raster_lr_lon", 0.);
+            results.put("raster_lr_lat", 0.);
+            results.put("depth", 0);
+            results.put("query_success", false);
+            return results;
+        }
+
+        String[][] renderGrid = new String[y1 - y0 + 1][x1 - x0 + 1];
+        boolean querySuccess = false;
+        for (int i = 0; i < renderGrid.length; i++) {
+            for (int j = 0; j <renderGrid[i].length; j++) {
+                renderGrid[i][j] = String.format("d%d_x%d_y%d.png", depth, j + x0, i + y0);
+                querySuccess = true;
+            }
+        }
+
+        results.put("render_grid", renderGrid);
+        results.put("raster_ul_lon", rasterULLon);
+        results.put("raster_ul_lat", rasterULLat);
+        results.put("raster_lr_lon", rasterLRLon);
+        results.put("raster_lr_lat", rasterLRLat);
+        results.put("depth", depth);
+        results.put("query_success", querySuccess);
         return results;
+    }
+
+    private int getRequestedDepth(double requestLonDPP) {
+        for (int i = 0; i <= MAX_DEPTH; i++) {
+            double lonDPP = Math.abs(ROOT_LRLON - ROOT_ULLON) / (TILE_SIZE * Math.pow(2, i));
+            if (Double.compare(lonDPP, requestLonDPP) <= 0) {
+                return i;
+            }
+        }
+        return MAX_DEPTH;
     }
 
     @Override

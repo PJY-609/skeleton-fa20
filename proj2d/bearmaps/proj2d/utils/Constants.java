@@ -14,6 +14,11 @@ import java.util.List;
 public class Constants {
 
     /**
+     * The maximum depth of map's resolution
+     */
+    public static final int MAX_DEPTH = 7;
+
+    /**
      * The root upper left/lower right longitudes and latitudes represent the bounding box of
      * the root tile, as the images in the img/ folder are scraped.
      * Longitude == x-axis; latitude == y-axis.
